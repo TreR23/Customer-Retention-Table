@@ -1,0 +1,84 @@
+--This is for the Cohort Analysis Customer Rentention Chart.
+--Created in BiqQuery
+--Used #6 to build Looker table
+--https://lookerstudio.google.com/reporting/731290b0-ccf0-4e10-87d0-52fc1561d040
+
+
+SELECT *
+FROM `sourcemedium-375318.TestData.Test_Dataset_-_Orders`;
+
+
+--#1 Create table with only data needed
+
+
+CREATE OR REPLACE TABLE
+  TestData.orders AS 
+SELECT 
+  order_date, 
+  order_id,
+  customer_id
+FROM `sourcemedium-375318.TestData.Test_Dataset_-_Orders`
+WHERE customer_id IS NOT NULL;
+
+
+--#2 Grabbing the order month
+
+
+CREATE OR REPLACE TABLE
+  TestData.s1 AS 
+SELECT 
+  order_id,
+  order_date,
+  EXTRACT(MONTH FROM order_date) AS Order_Month,
+  customer_id
+FROM `sourcemedium-375318.TestData.Test_Dataset_-_Orders`;
+
+
+--#3 Getting the first order month
+
+
+CREATE OR REPLACE TABLE
+  TestData.s2 AS 
+SELECT 
+  customer_id,
+  MIN(Order_Month) AS First_Month
+FROM TestData.s1
+GROUP BY customer_id;
+
+
+--#4 Joining staging tables
+
+
+CREATE OR REPLACE TABLE
+  TestData.s3 AS 
+SELECT *
+FROM TestData.s1
+LEFT JOIN TestData.s2
+USING (customer_id);
+
+
+--#5 Creating a Cohort Index
+
+
+CREATE OR REPLACE TABLE
+  TestData.s4 AS 
+SELECT *,
+  (Order_Month - First_Month) AS Cohort_Index
+FROM TestData.s3
+
+
+--#6 Producing final table to build Looker viz from
+
+
+CREATE OR REPLACE TABLE
+  TestData.s5 AS 
+SELECT 
+  First_Month,
+  Cohort_Index,
+  COUNT(DISTINCT customer_id) AS Customer_Count
+FROM `TestData.s4`
+WHERE First_Month IS NOT NULL
+GROUP BY 
+  First_Month,
+  Cohort_Index
+ORDER BY First_Month
